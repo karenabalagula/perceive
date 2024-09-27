@@ -2,3 +2,7 @@
 *.asv
 perceive.asv
 *.asv
+*.pdf
+*.png
+Report*.json
+/JSON*

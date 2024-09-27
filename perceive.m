@@ -34,7 +34,8 @@ arguments
     %mod = ''; %BrainSense, IS, LMTD, Chronic + Bip Ring RingL RingR SegmIntraL SegmInterL SegmIntraR SegmInterR
     %run = ''; %numeric
 
-    extended {mustBeMember(extended,["","yes"])} = '';
+    % extended {mustBeMember(extended,["","yes"])} = '';
+    extended {mustBeA(extended, ["boolean", "logical"])} = '';
 
 end
 
@@ -757,11 +758,17 @@ for a = 1:length(files)
                             LAmp=d.trial{1}(3,:);
                         elseif contains(d.label(4),'STIM_L')
                             LAmp=d.trial{1}(4,:);
+                        else
+                            LAmp = nan;
                         end
+
+                        % repeart for the right side stim
                         if contains(d.label(3),'STIM_R')
                             RAmp=d.trial{1}(3,:);
                         elseif contains(d.label(4),'STIM_R')
                             RAmp=d.trial{1}(4,:);
+                        else
+                            RAmp = nan;
                         end
                         
                         % d.hdr.SessionDate
@@ -1234,269 +1241,8 @@ for a = 1:length(files)
 
     %nfile = fullfile(hdr.fpath,[hdr.fname '.jsoncopy']);
     %copyfile(files{a},nfile)
-
-    counterBrainSense=0;
-    %% save all data
-    for b = 1:length(alldata)
-        fullname = fullfile('.',hdr.fpath,alldata{b}.fname);
-        data=alldata{b};
-        % remove the optional 'keepfig' field (not to mess up the saved data)
-        if isfield(data,'keepfig')
-            data=rmfield(data,'keepfig');
-        end
-
-        % restore the data (incl. the optional 'keepfig' field)
-        data=alldata{b};
-
-        %% handle BSTD and BSL files to BrainSenseBip
-        if regexp(data.fname,'BSTD')
-            counterBrainSense=counterBrainSense+1;
-
-            data.fname = strrep(data.fname,'BSTD','BrainSenseBip');
-            data.fname = strrep(data.fname,'task-Rest',['task-TASK' num2str(counterBrainSense)]);
-            fulldata = data;
-
-            [folder,~,~]=fileparts(fullname);
-            [~,~,list_of_BSLfiles]=perceive_ffind([folder, filesep, '*BSL','*.mat']);
-
-            bsl=load(list_of_BSLfiles{counterBrainSense});
-
-            if ~isequal(bsl.data.hdr.SessionEndDate, data.hdr.SessionEndDate)
-                warning('BSL file could not be matched BSTD data to create BrainSense.')
-            else
-                fulldata.BSLDateTime = [bsl.data.realtime(1) bsl.data.realtime(end)];
-
-                fulldata.label(3:6) = bsl.data.label;
-                fulldata.time{1}=fulldata.time{1};
-                otime = bsl.data.time{1};
-                for c =1:4
-                    fulldata.trial{1}(c+2,:) = interp1(otime-otime(1),bsl.data.trial{1}(c,:),fulldata.time{1}-fulldata.time{1}(1),'nearest');
-                end
-                %% determine StimOff or StimOn
-
-                acq=regexp(bsl.data.fname,'Stim.*(?=_mod)','match'); %Search for StimOff StimOn
-                if ~isempty(acq)
-                    acq=acq{1};
-                else
-                    acq=regexp(bsl.data.fname,'Burst.*(?=_mod)','match'); %Search for burst name
-                    acq=acq{1};
-                end
-                fulldata.fname = strrep(fulldata.fname,'StimOff',acq);
-                user = memory;
-                if user.MemUsedMATLAB < 9^10 %corresponds with 9MB
-
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                    if size(fulldata.trial{1},2) > 250*2  %% code edited by Mansoureh Fahimi (changed 250 to 250*2)
-                        figure('Units','centimeters','PaperUnits','centimeters','Position',[1 1 40 20])
-                        subplot(2,2,1)
-                        yyaxis left
-                        plot(fulldata.time{1},fulldata.trial{1}(1,:))
-                        ylabel('Raw amplitude')
-                        if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                        elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
-                        else
-                            error('neither Left nor Right TherapySnapshot present');
-                        end
-                        hold on
-
-                        [tf,t,f]=perceive_raw_tf(fulldata.trial{1}(1,:),fulldata.fsample,128,.3);
-                        mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
-                        yyaxis right
-                        ylabel('LFP and STIM amplitude')
-                        plot(fulldata.time{1},fulldata.trial{1}(3,:))
-                        %LAmp = fulldata.trial{1}(3,:);
-                        xlim([fulldata.time{1}(1),fulldata.time{1}(end)])
-                        hold on
-                        plot(fulldata.time{1},fulldata.trial{1}(5,:).*1000)
-                        plot(t,mpow.*1000)
-                        title(strrep({fulldata.label{3},fulldata.label{5}},'_',' '))
-                        axes('Position',[.34 .8 .1 .1])
-                        box off
-                        plot(f,nanmean(log(tf),2))
-                        xlabel('F')
-                        ylabel('P')
-                        xlim([3 40])
-
-                        axes('Position',[.16 .8 .1 .1])
-                        box off
-                        plot(fulldata.time{1},fulldata.trial{1}(1,:))
-                        xlabel('T'),ylabel('A')
-                        xx = randi(round([fulldata.time{1}(1),fulldata.time{1}(end)]),1);
-                        xlim([xx xx+1.5])
-
-                        subplot(2,2,3)
-                        imagesc(t,f,log(tf)),axis xy,
-                        xlabel('Time [s]')
-                        ylabel('Frequency [Hz]')
-
-                        subplot(2,2,2)
-                        yyaxis left
-                        plot(fulldata.time{1},fulldata.trial{1}(2,:))
-                        ylabel('Raw amplitude')
-                        if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
-                        elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                        else
-                            error('neither Left nor Right TherapySnapshot present');
-                        end
-                        hold on
-                        [tf,t,f]=perceive_raw_tf(fulldata.trial{1}(2,:),fulldata.fsample,fulldata.fsample,.5);
-                        mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
-                        yyaxis right
-                        ylabel('LFP and STIM amplitude')
-                        plot(fulldata.time{1},fulldata.trial{1}(4,:))
-                        %RAmp = fulldata.trial{1}(4,:);
-                        xlim([fulldata.time{1}(1),fulldata.time{1}(end)])
-                        hold on
-                        plot(fulldata.time{1},fulldata.trial{1}(6,:).*1000)
-                        plot(t,mpow.*1000)
-
-                        title(strrep({fulldata.fname,fulldata.label{4},fulldata.label{6}},'_',' '))
-                        %%
-                        axes('Position',[.78 .8 .1 .1])
-                        box off
-                        plot(f,nanmean(log(tf),2))
-                        xlim([3 40])
-                        xlabel('F')
-                        ylabel('P')
-
-                        axes('Position',[.6 .8 .1 .1])
-                        box off
-                        plot(fulldata.time{1},fulldata.trial{1}(2,:))
-                        xlabel('T'),ylabel('A')
-                        xlim([xx xx+1.5])
-
-                        subplot(2,2,4)
-                        imagesc(t,f,log(tf)),axis xy,
-                        xlabel('Time [s]')
-                        ylabel('Frequency [Hz]')
-
-                        perceive_print(fullfile('.',hdr.fpath, fulldata.fname))
-                    else
-                        disp('There is a potential problem: a figure got not created, but the code below would print the current figure (which holds something else than the current ''data'')!');
-                        disp('Perhaps, the code printing the figure should be placed inside the ''size(fulldata.trial{1},2) > 250'' branch?');
-                        disp('Please, review it.');
-                    end
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                end
-                %% save data of BSTD
-                fullname = fullfile('.',hdr.fpath,fulldata.fname);
-                %perceive_print(fullname) %% no useful information
-                % close the figure if should not be kept open
-                if isfield(fulldata,'keepfig')
-                    if ~fulldata.keepfig
-                        close();
-                    end
-                    fulldata=rmfield(fulldata,'keepfig');
-                end
-                data=fulldata;
-                run = 1;
-                fullname = [fullname '_run-' num2str(run)];
-                while isfile([fullname '.mat'])
-                    run = run+1;
-                    fullname = (regexp(fullname, '.*_run-','match'));
-                    fullname = [fullname{1} num2str(run)];
-                end
-                [~,fname,~] = fileparts(fullname);
-                data.fname = [fname '.mat'];
-                disp(['WRITING ' fullname '.mat as FieldTrip file.'])
-                save([fullname '.mat'],'data')
-                if sesMedOffOn01
-                    MetaT= metadata_to_table(MetaT,data);
-                end
-            end
-            %% no BSTD, so save the data
-        else
-
-            %% create plot for LMTD and change name
-            if contains(fullname,'LMTD') 
-                mod_ext=check_mod_ext(data.label);
-                fullname = strrep(fullname,'mod-LMTD',['mod-LMTD' mod_ext]);
-                data.fname = strrep(data.fname,'mod-LMTD',['mod-LMTD' mod_ext]);
-                perceive_plot_raw_signals(data); % for LMTD
-                perceive_print(fullname);
-            elseif any(extended)
-                perceive_plot_raw_signals(data); % for LMTD
-                perceive_print(fullname);
-            end
-
-            run = 1;
-            fullname = [fullname '_run-' num2str(run)];
-            while isfile([fullname '.mat'])
-                run = run+1;
-                fullname = (regexp(fullname, '.*_run-','match'));
-                fullname = [fullname{1} num2str(run)];
-            end
-            [~,fname,~] = fileparts(fullname);
-            data.fname = [fname '.mat'];
-            disp(['WRITING ' fullname '.mat as FieldTrip file.'])
-            save([fullname '.mat'],'data');
-            if sesMedOffOn01
-                MetaT= metadata_to_table(MetaT,data);
-            end
-            %savefig([fullname '.fig'])
-            % close the figure if should not be kept open
-            if isfield(data,'keepfig')
-                if ~data.keepfig
-                    close();
-                end
-            end
-        end
-
-    end
     close all
 
-    if ~isempty(sesMedOffOn01) && height(MetaT)>1
-        MetaTOld = MetaT;
-        app=perceive_gui(MetaT);
-        waitfor(app.saveandcontinueButton,'UserData')
-        MetaT=app.MetaT;
-        app.delete;
-        %do the file renaming according to the interface metatable
-        
-        rows_to_remove = [];
-        for i = 1:height(MetaT)
-            if strcmp(MetaT.remove{i},'REMOVE')
-            % do nothing OR %%% when necessary we need to remove the old file
-                delete(fullfile(hdr.fpath,MetaTOld.perceiveFilename{i}))
-                rows_to_remove = [rows_to_remove, i];
-            elseif strcmp(MetaT.remove{i},'keep')
-                if ~isequal(fullfile(hdr.fpath,MetaTOld.perceiveFilename{i}), fullfile(hdr.fpath,MetaT.perceiveFilename{i}))
-                    load(fullfile(hdr.fpath,MetaTOld.perceiveFilename{i}), 'data');
-                    data.fname = MetaT.perceiveFilename{i};
-                    save(fullfile(hdr.fpath,MetaTOld.perceiveFilename{i}), 'data')
-                    movefile(fullfile(hdr.fpath,MetaTOld.perceiveFilename{i}), fullfile(hdr.fpath,MetaT.perceiveFilename{i}));
-                    warning('updating filename part')
-                end
-            end
-        end
-        MetaT(rows_to_remove,:) = [];
-        m=0;
-        MetaTcopy=MetaT;
-        for i = 1:height(MetaTcopy)
-            if strcmp(MetaTcopy.part{i},'1') % search only if the part is 1 to stich the other parts
-
-                %recording1 = MetaTcopy.perceiveFilename{i};
-                %recording2 = strrep(MetaTcopy.perceiveFilename{i},'part-1','part-2');
-                recording_basename = strrep(MetaTcopy.perceiveFilename{i},'part-1.mat','part-');
-                %data = perceive_stitch_interruption_together(fullfile(hdr.fpath,recording1),fullfile(hdr.fpath,recording2));
-                data = perceive_stitch_interruption_together(fullfile(hdr.fpath,recording_basename));
-
-                MetaT = [MetaT(1:i+m,:); MetaT(i+m:end,:)];
-                MetaT.part{i+m}='';
-                MetaT.perceiveFilename{i+m}= data.fname{1};
-                save(fullfile(hdr.fpath,data.fname{1}),'data');
-                m=m+1;
-            end
-        end
-    end
-    if ~isempty(MetaT)
-        writetable(MetaT,fullfile(hdr.fpath,[ sub{1} '_' ses '_metadata_' MetaT.report{1} '.xlsx']));
-    end
 end
 disp('all done!')
 end
@@ -1645,7 +1391,7 @@ for e = 1:size(raw,1)
     title(strrep(d.label{e},'_',' '))
     xlabel(strrep(d.fname,'_',' '))
     %savefig(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e} '.fig']))
-    perceive_print(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e}]))
+    perceive_print(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e}]), 'png', true)
     d.ecg_cleaned(e,:) = d.ecg{e}.cleandata;
 end
 end

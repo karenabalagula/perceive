@@ -1,30 +1,35 @@
-function perceive_print(filename, mode)
+function perceive_print(filename, mode, boolChangeFilename)
 
 arguments
     filename {mustBeText}
     mode    {mustBeMember(mode,{'png','pdf'})} = 'png'
+    boolChangeFilename {mustBeA(boolChangeFilename, ["boolean", "logical"])} = false;
 end
 
 [fold,file,ext]=fileparts(filename);
 if ~exist(fold,'dir')
     mkdir(fold);
 end
+
 if ~contains(file, 'run')
     if ~endsWith(file, '-1')
         file = [file '-1'];
     end
 end
-while isfile(fullfile(fold,[file '.' mode]))
-    if isstrprop(file(end),'digit')
-        addition =num2str(str2num(file(end))+1);
-        if length(addition) == 1
-            file(end)=addition;
-        else
-            file(end:end+1)=addition;
-        end
 
-    else
-        file = [file '-1'];
+if boolChangeFilename
+    while isfile(fullfile(fold,[file '.' mode]))
+        if isstrprop(file(end),'digit')
+            addition =num2str(str2num(file(end))+1);
+            if length(addition) == 1
+                file(end)=addition;
+            else
+                file(end:end+1)=addition;
+            end
+    
+        else
+            file = [file '-1'];
+        end
     end
 end
 
