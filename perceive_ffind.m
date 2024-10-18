@@ -74,14 +74,14 @@ folder = folder(x);
 if ~isempty(files)
     if ~cell && length(files) == 1
         files = files{1};
-        fullfname = [folder{1} filesep files];
+        fullfname = [files];
     elseif iscell(files) && isempty(files{1})
         files = [];
         folder = [];
         fullfname = [];
     elseif iscell(files)
         for a=1:length(files)
-            fullfname{a,1} = [folder{a} filesep files{a}];
+            fullfname{a,1} = [files{a}];
         end   
     end
 else
