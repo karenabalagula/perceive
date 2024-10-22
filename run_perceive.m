@@ -1,6 +1,8 @@
 clc; clear; close all
 
+addpath(genpath(fullfile('auxf', 'external')));
 
 %%
-perceive('Report_Json_Session_Report_20240725T123444.json', 'JSON_ID_26', ...
-    '', true)
+% perceive('JSON_ID26-27_B.json', 'JSON_ID_26-27', '', true)
+% perceive('JSON_ID30_B.json', 'JSON_ID_30', '', true)
+perceive('JSON_ID33_B.json', 'JSON_ID_33', '', true)
