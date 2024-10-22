@@ -86,10 +86,12 @@ if ~isempty(files)
     end
 else
     folder = [];
-    fullfnames = [];
+    fullfname = [];
 end
-    
 
+% change to natural order
+files = natsortfiles(files);
+fullfname = natsortfiles(fullfname);
 
 
 % keyboard

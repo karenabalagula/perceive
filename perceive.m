@@ -1245,209 +1245,259 @@ for a = 1:length(files)
     counterBrainSense=0;
     %% save all data
     for b = 1:length(alldata)
-        fullname = fullfile('.',hdr.fpath,alldata{b}.fname);
-        data=alldata{b};
-        % remove the optional 'keepfig' field (not to mess up the saved data)
-        if isfield(data,'keepfig')
-            data=rmfield(data,'keepfig');
-        end
+        try
+            fullname = fullfile('.',hdr.fpath,alldata{b}.fname);
+            data=alldata{b};
+            % remove the optional 'keepfig' field (not to mess up the saved data)
+            if isfield(data,'keepfig')
+                data=rmfield(data,'keepfig');
+            end
 
-        % restore the data (incl. the optional 'keepfig' field)
-        data=alldata{b};
+            % restore the data (incl. the optional 'keepfig' field)
+            data=alldata{b};
 
-        %% handle BSTD and BSL files to BrainSenseBip
-        if regexp(data.fname,'BSTD')
-            counterBrainSense=counterBrainSense+1;
+            %% handle BSTD and BSL files to BrainSenseBip
+            if regexp(data.fname,'BSTD')
+                counterBrainSense=counterBrainSense+1;
 
-            data.fname = strrep(data.fname,'BSTD','BrainSenseBip');
-            data.fname = strrep(data.fname,'task-Rest',['task-TASK' num2str(counterBrainSense)]);
-            fulldata = data;
+                data.fname = strrep(data.fname,'BSTD','BrainSenseBip');
+                data.fname = strrep(data.fname,'task-Rest',['task-TASK' num2str(counterBrainSense)]);
+                fulldata = data;
 
-            [folder,~,~]=fileparts(fullname);
-            [~,~,list_of_BSLfiles]=perceive_ffind([folder, filesep, '*BSL','*.mat']);
+                [folder,~,~]=fileparts(fullname);
+                [~,~,list_of_BSLfiles]=perceive_ffind([folder, filesep, '*BSL','*.mat']);
 
-            bsl=load(list_of_BSLfiles{counterBrainSense});
+                bsl=load(list_of_BSLfiles{counterBrainSense});
 
-            if ~isequal(bsl.data.hdr.SessionEndDate, data.hdr.SessionEndDate)
-                warning('BSL file could not be matched BSTD data to create BrainSense.')
-            else
-                fulldata.BSLDateTime = [bsl.data.realtime(1) bsl.data.realtime(end)];
-
-                fulldata.label(3:6) = bsl.data.label;
-                fulldata.time{1}=fulldata.time{1};
-                otime = bsl.data.time{1};
-                for c =1:4
-                    fulldata.trial{1}(c+2,:) = interp1(otime-otime(1),bsl.data.trial{1}(c,:),fulldata.time{1}-fulldata.time{1}(1),'nearest');
-                end
-                %% determine StimOff or StimOn
-
-                acq=regexp(bsl.data.fname,'Stim.*(?=_mod)','match'); %Search for StimOff StimOn
-                if ~isempty(acq)
-                    acq=acq{1};
+                if ~isequal(bsl.data.hdr.SessionEndDate, data.hdr.SessionEndDate)
+                    warning('BSL file could not be matched BSTD data to create BrainSense.')
                 else
-                    acq=regexp(bsl.data.fname,'Burst.*(?=_mod)','match'); %Search for burst name
-                    acq=acq{1};
-                end
-                fulldata.fname = strrep(fulldata.fname,'StimOff',acq);
+                    fulldata.BSLDateTime = [bsl.data.realtime(1) bsl.data.realtime(end)];
 
-                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                if size(fulldata.trial{1},2) > 250*2  %% code edited by Mansoureh Fahimi (changed 250 to 250*2)
-                    figure('Units','centimeters','PaperUnits','centimeters','Position',[1 1 40 20])
-                    subplot(2,2,1)
-                    yyaxis left
-                    plot(fulldata.time{1},fulldata.trial{1}(1,:))
-                    ylabel('Raw amplitude')
-                    if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
-                        pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                        pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                    elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
-                        pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
+                    fulldata.label(3:6) = bsl.data.label;
+                    fulldata.time{1}=fulldata.time{1};
+                    otime = bsl.data.time{1};
+                    for c =1:4
+                        fulldata.trial{1}(c+2,:) = interp1(otime-otime(1),bsl.data.trial{1}(c,:),fulldata.time{1}-fulldata.time{1}(1),'nearest');
+                    end
+                    %% determine StimOff or StimOn
+
+                    acq=regexp(bsl.data.fname,'Stim.*(?=_mod)','match'); %Search for StimOff StimOn
+                    if ~isempty(acq)
+                        acq=acq{1};
                     else
-                        error('neither Left nor Right TherapySnapshot present');
+                        acq=regexp(bsl.data.fname,'Burst.*(?=_mod)','match'); %Search for burst name
+                        acq=acq{1};
                     end
-                    hold on
+                    fulldata.fname = strrep(fulldata.fname,'StimOff',acq);
 
-                    [tf,t,f]=perceive_raw_tf(fulldata.trial{1}(1,:),fulldata.fsample,128,.3);
-                    mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
-                    yyaxis right
-                    ylabel('LFP and STIM amplitude')
-                    plot(fulldata.time{1},fulldata.trial{1}(3,:))
-                    %LAmp = fulldata.trial{1}(3,:);
-                    xlim([fulldata.time{1}(1),fulldata.time{1}(end)])
-                    hold on
-                    plot(fulldata.time{1},fulldata.trial{1}(5,:).*1000)
-                    plot(t,mpow.*1000)
-                    title(strrep({fulldata.label{3},fulldata.label{5}},'_',' '))
-                    axes('Position',[.34 .8 .1 .1])
-                    box off
-                    plot(f,nanmean(log(tf),2))
-                    xlabel('F')
-                    ylabel('P')
-                    xlim([3 40])
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    if size(fulldata.trial{1},2) > 250*2  %% code edited by Mansoureh Fahimi (changed 250 to 250*2)
+                        figure('Units','centimeters','PaperUnits','centimeters','Position',[1 1 40 20])
 
-                    axes('Position',[.16 .8 .1 .1])
-                    box off
-                    plot(fulldata.time{1},fulldata.trial{1}(1,:))
-                    xlabel('T'),ylabel('A')
-                    xx = randi(round([fulldata.time{1}(1),fulldata.time{1}(end)]),1);
-                    xlim([xx xx+1.5])
+                        % create tiled layout
+                        fig = tiledlayout(2,2, 'TileSpacing', 'compact', ...
+                            'Padding', 'compact');
 
-                    subplot(2,2,3)
-                    imagesc(t,f,log(tf)),axis xy,
-                    xlabel('Time [s]')
-                    ylabel('Frequency [Hz]')
+                        % perform quick conversion of time into seconds
+                        BSDT = fulldata.BrainSenseDateTime(1);
+                        BSDT.TimeZone = 'UTC';
+                        timeDateTimeTD = seconds(fulldata.time{1}  - ...
+                            fulldata.time{1}(1));
+                        timeDateTimeTD = BSDT + timeDateTimeTD;
+                        timeDateTimeTD.TimeZone = 'America/Los_Angeles';
 
-                    subplot(2,2,2)
-                    yyaxis left
-                    plot(fulldata.time{1},fulldata.trial{1}(2,:))
-                    ylabel('Raw amplitude')
-                    if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
-                        pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
-                    elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
-                        pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                    else
-                        error('neither Left nor Right TherapySnapshot present');
+                        % plot time domain for one side
+                        nexttile
+                        hold on
+                        yyaxis left
+                        plot(timeDateTimeTD,fulldata.trial{1}(1,:), ...
+                            'DisplayName', 'Time Domain')
+                        ylabel('Raw amplitude')
+                        if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
+                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
+                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
+                        elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
+                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
+                        else
+                            error('neither Left nor Right TherapySnapshot present');
+                        end
+                        [tf_side1, t, f_side1]=perceive_raw_tf(fulldata.trial{1}(1,:),fulldata.fsample,128,.3);
+                        % mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
+
+                        yyaxis right
+                        hold on
+                        ylabel('LFP and STIM amplitude')
+                        % plot LFP
+                        plot(timeDateTimeTD, fulldata.trial{1}(3,:), ...
+                            'DisplayName', 'LFP', 'LineWidth', 2);
+
+                        title(strrep({fulldata.label{3},fulldata.label{5}},'_',' '))
+                        xlim([timeDateTimeTD(1), timeDateTimeTD(end)])
+                        legend('Box', 'off')
+
+                        % plot(t,mpow.*1000)
+                        % axes('Position',[.34 .8 .1 .1])
+                        % box off
+                        % plot(f,nanmean(log(tf),2))
+                        % xlabel('F')
+                        % ylabel('P')
+                        % xlim([3 40])
+
+                        % axes('Position',[.16 .8 .1 .1])
+                        % box off
+                        % plot(fulldata.time{1},fulldata.trial{1}(1,:))
+                        % xlabel('T'),ylabel('A')
+                        % xx = randi(round([fulldata.time{1}(1),fulldata.time{1}(end)]),1);
+                        % xlim([xx xx+1.5])
+
+                        nexttile;
+                        yyaxis left
+                        hold on
+                        plot(timeDateTimeTD, fulldata.trial{1}(2,:), ...
+                            'DisplayName', 'Time Domain');
+                        ylabel('Raw amplitude')
+                        if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
+                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
+                        elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
+                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
+                        else
+                            error('neither Left nor Right TherapySnapshot present');
+                        end
+                        [tf_side2,t,f_side2]=perceive_raw_tf(fulldata.trial{1}(2,:),fulldata.fsample,fulldata.fsample,.5);
+                        % mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
+
+                        yyaxis right
+                        hold on
+                        ylabel('LFP and STIM amplitude')
+                        % plot LFP
+                        plot(timeDateTimeTD,fulldata.trial{1}(4,:) ,...
+                            'DisplayName', 'LFP', 'LineWidth', 2);
+
+                        title(strrep({fulldata.label{4},fulldata.label{6}},'_',' '))
+                        xlim([timeDateTimeTD(1), timeDateTimeTD(end)])
+                        legend('Box', 'off');
+
+                        % plot(t,mpow.*1000)
+                        % axes('Position',[.78 .8 .1 .1])
+                        % box off
+                        % plot(f,nanmean(log(tf),2))
+                        % xlim([3 40])
+                        % xlabel('F')
+                        % ylabel('P')
+                        %
+                        % axes('Position',[.6 .8 .1 .1])
+                        % box off
+                        % plot(fulldata.time{1},fulldata.trial{1}(2,:))
+                        % xlabel('T'),ylabel('A')
+                        % xlim([xx xx+1.5])
+
+                        % now plot the spectrogram
+                        % plot for left side
+                        nexttile
+                        hold on;
+                        imagesc(timeDateTimeTD, f_side1, log(tf_side1)),axis xy,
+                        xlabel('Time')
+                        ylabel('Frequency [Hz]')
+
+                        % plot stim amp
+                        norm_stim_s1 = fulldata.trial{1}(5,:);
+                        max_norm_stim_s1 = ceil(max(norm_stim_s1));
+                        min_norm_stim = 0;
+
+                        norm_stim_s1 = (norm_stim_s1 - min_norm_stim) / ...
+                            (max_norm_stim_s1 - min_norm_stim) * f_side1(end);
+                        plot(timeDateTimeTD, norm_stim_s1, ...
+                            'DisplayName', 'Stim Amp', 'LineWidth', 4, ...
+                            'Color', "#A2142F");
+                        xlim([timeDateTimeTD(1), timeDateTimeTD(end)])
+                        ylim([f_side1(1), f_side1(end)])
+
+                        % plot for right side
+                        nexttile
+                        hold on;
+                        imagesc(timeDateTimeTD, f_side2, log(tf_side2)),axis xy,
+                        xlabel('Time')
+                        ylabel('Frequency [Hz]');
+
+                        % plot stim amp
+                        norm_stim_s2 = fulldata.trial{1}(6,:);
+                        max_norm_stim_s2 = ceil(max(norm_stim_s2));
+                        min_norm_stim = 0;
+
+                        norm_stim_s2 = (norm_stim_s2 - min_norm_stim) / ...
+                            (max_norm_stim_s2 - min_norm_stim) * f_side2(end);
+
+                        plot(timeDateTimeTD, norm_stim_s2, ...
+                            'DisplayName', 'Stim Amp', 'LineWidth', 4, ...
+                            'Color', "#A2142F");
+                        xlim([timeDateTimeTD(1), timeDateTimeTD(end)])
+                        ylim([f_side2(1), f_side2(end)])
+
+                        perceive_print(fullfile('.',hdr.fpath, fulldata.fname))
+
+                        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                     end
-                    hold on
-                    [tf,t,f]=perceive_raw_tf(fulldata.trial{1}(2,:),fulldata.fsample,fulldata.fsample,.5);
-                    mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
-                    yyaxis right
-                    ylabel('LFP and STIM amplitude')
-                    plot(fulldata.time{1},fulldata.trial{1}(4,:))
-                    %RAmp = fulldata.trial{1}(4,:);
-                    xlim([fulldata.time{1}(1),fulldata.time{1}(end)])
-                    hold on
-                    plot(fulldata.time{1},fulldata.trial{1}(6,:).*1000)
-                    plot(t,mpow.*1000)
+                    %% save data of BSTD
+                    fullname = fullfile('.',hdr.fpath,fulldata.fname);
+                    %perceive_print(fullname) %% no useful information
+                    % close the figure if should not be kept open
+                    if isfield(fulldata,'keepfig')
+                        if ~fulldata.keepfig
+                            close();
+                        end
+                        fulldata=rmfield(fulldata,'keepfig');
+                    end
+                    data=fulldata;
+                    run = 1;
+                    fullname = [fullname '_run-' num2str(run)];
 
-                    title(strrep({fulldata.fname,fulldata.label{4},fulldata.label{6}},'_',' '))
-                    %%
-                    axes('Position',[.78 .8 .1 .1])
-                    box off
-                    plot(f,nanmean(log(tf),2))
-                    xlim([3 40])
-                    xlabel('F')
-                    ylabel('P')
-
-                    axes('Position',[.6 .8 .1 .1])
-                    box off
-                    plot(fulldata.time{1},fulldata.trial{1}(2,:))
-                    xlabel('T'),ylabel('A')
-                    xlim([xx xx+1.5])
-
-                    subplot(2,2,4)
-                    imagesc(t,f,log(tf)),axis xy,
-                    xlabel('Time [s]')
-                    ylabel('Frequency [Hz]')
-
-                    perceive_print(fullfile('.',hdr.fpath, fulldata.fname))
-
-                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                    % save if does not exist
+                    if ~isfile([fullname '.mat'])
+                        [~,fname,~] = fileparts(fullname);
+                        data.fname = [fname '.mat'];
+                        disp(['WRITING ' fullname '.mat as FieldTrip file.'])
+                        save([fullname '.mat'],'data')
+                    end
                 end
-                %% save data of BSTD
-                fullname = fullfile('.',hdr.fpath,fulldata.fname);
-                %perceive_print(fullname) %% no useful information
-                % close the figure if should not be kept open
-                if isfield(fulldata,'keepfig')
-                    if ~fulldata.keepfig
-                        close();
-                    end
-                    fulldata=rmfield(fulldata,'keepfig');
+                %% no BSTD, so save the data
+            else
+
+                %% create plot for LMTD and change name
+                if contains(fullname,'LMTD')
+                    mod_ext=check_mod_ext(data.label);
+                    fullname = strrep(fullname,'mod-LMTD',['mod-LMTD' mod_ext]);
+                    data.fname = strrep(data.fname,'mod-LMTD',['mod-LMTD' mod_ext]);
+                    % perceive_plot_raw_signals(data); % for LMTD
+                    % perceive_print(fullname);
+                elseif any(extended)
+                    % perceive_plot_raw_signals(data); % for LMTD
+                    % perceive_print(fullname);
+                    % don't do anything
+                    t1 = 1;
                 end
-                data=fulldata;
+
                 run = 1;
                 fullname = [fullname '_run-' num2str(run)];
-                while isfile([fullname '.mat'])
-                    run = run+1;
-                    fullname = (regexp(fullname, '.*_run-','match'));
-                    fullname = [fullname{1} num2str(run)];
-                end
-                [~,fname,~] = fileparts(fullname);
-                data.fname = [fname '.mat'];
-                disp(['WRITING ' fullname '.mat as FieldTrip file.'])
-                save([fullname '.mat'],'data')
-                if sesMedOffOn01
-                    MetaT= metadata_to_table(MetaT,data);
-                end
-            end
-            %% no BSTD, so save the data
-        else
 
-            %% create plot for LMTD and change name
-            if contains(fullname,'LMTD')
-                mod_ext=check_mod_ext(data.label);
-                fullname = strrep(fullname,'mod-LMTD',['mod-LMTD' mod_ext]);
-                data.fname = strrep(data.fname,'mod-LMTD',['mod-LMTD' mod_ext]);
-                perceive_plot_raw_signals(data); % for LMTD
-                perceive_print(fullname);
-            elseif any(extended)
-                perceive_plot_raw_signals(data); % for LMTD
-                perceive_print(fullname);
+                % save if does not exist
+                if ~isfile([fullname '.mat'])
+                    [~,fname,~] = fileparts(fullname);
+                    data.fname = [fname '.mat'];
+                    disp(['WRITING ' fullname '.mat as FieldTrip file.'])
+                    save([fullname '.mat'],'data');
+                end
+
+                %savefig([fullname '.fig'])
+                % close the figure if should not be kept open
+                if isfield(data,'keepfig')
+                    if ~data.keepfig
+                        close();
+                    end
+                end
             end
 
-            run = 1;
-            fullname = [fullname '_run-' num2str(run)];
-            while isfile([fullname '.mat'])
-                run = run+1;
-                fullname = (regexp(fullname, '.*_run-','match'));
-                fullname = [fullname{1} num2str(run)];
-            end
-            [~,fname,~] = fileparts(fullname);
-            data.fname = [fname '.mat'];
-            disp(['WRITING ' fullname '.mat as FieldTrip file.'])
-            save([fullname '.mat'],'data');
-            if sesMedOffOn01
-                MetaT= metadata_to_table(MetaT,data);
-            end
-            %savefig([fullname '.fig'])
-            % close the figure if should not be kept open
-            if isfield(data,'keepfig')
-                if ~data.keepfig
-                    close();
-                end
-            end
         end
-
     end
     close all
 
