@@ -1,4 +1,4 @@
-function ecg=perceive_ecg(data,fs,plotit)
+function ecg=perceive_ecg(data, datetime, fs,plotit)
 % ecg = perceive_ecg(data,fs,plotit)
 % data = raw signal (required)
 % fs = sampling rate (default = 250)
@@ -163,8 +163,9 @@ if plotit
     ylabel('Relative spectral power [%]');title([' HR: ' num2str(ecg.hr,3) '/min  N = ' num2str(ecg.stats.n,3)]);
     
     subplot(2,2,3:4);
-    plot(t,data,'color','r');    hold on
-    plot(t,ecg.cleandata,'color','k');
+    plot(datetime, data,'color','r');    hold on
+    plot(datetime, ecg.cleandata,'color','k');
+    xlim([datetime(1), datetime(end)]);
     legend('original','cleaned');ylabel('Amplitude');xlabel('Time [s]')
 end
 

@@ -261,7 +261,7 @@ for a = 1:length(files)
                     end
 
                 case 'PatientEvents'
-                    disp(fieldnames(data));
+                    continue
 
                 case 'MostRecentInSessionSignalCheck'
                     if extended
@@ -339,6 +339,7 @@ for a = 1:length(files)
 
                     end
                 case 'DiagnosticData'
+                    %% Timeline Data Plotting
                     if extended
                         hdr.fname = strrep(hdr.fname,'StimOff','StimX');
                         if isfield(data,'LFPTrendLogs')
@@ -403,7 +404,7 @@ for a = 1:length(files)
                                     d.time{1} = linspace(seconds(cdt(1)-hdr.d0),seconds(cdt(end)-hdr.d0),size(d.trial{1},2));
                                     d.realtime{1} = cdt;
                                     if length(d.time{1})>1
-                                        d.fsample = abs(1/diff(d.time{1}(1:2)))
+                                        d.fsample = abs(1/diff(d.time{1}(1:2)));
                                     else
                                         warning('Only one data point recorded, assuming a sampling frequency of 1 / 10 minutes ~ 0.0017 Hz');
                                         d.fsample = 1/600; % 10*60 sec = 10 minutes
@@ -491,11 +492,24 @@ for a = 1:length(files)
 
                         end
                     end
+                    
                 case 'BrainSenseTimeDomain'
+                    %% Time Domain Data Plotting
+                    % parse for incorrect runs added by mistake
+                    fsample = data.SampleRateInHz;
+                    data_new = struct([]);
+                    for idx_sess = 1:size(data, 1)
+                        lenSample = size(data(idx_sess).TimeDomainData, 1);
+                        if lenSample > fsample * 10
+                            data_new = [data_new; data(idx_sess)]; 
+                        end
+                    end
+                    data = data_new;
 
+                    % identify the number of runs
+                    counterBSTD = 0;
                     FirstPacketDateTime = strrep(strrep({data(:).FirstPacketDateTime},'T',' '),'Z','');
                     runs = unique(FirstPacketDateTime);
-                    fsample = data.SampleRateInHz;
 
                     Pass = {data(:).Pass};
                     tmp =  {data(:).GlobalSequences};
@@ -517,9 +531,6 @@ for a = 1:length(files)
                         time_real{c,:} = TicksInS{c,:}(1):1/fsample:TicksInS{c,:}(end)+(GlobalPacketSizes{c,:}(end)-1)/fsample;
                         time_real{c,:} = round(time_real{c,:},3);
                     end
-
-
-
 
                     gain=[data(:).Gain]';
                     [tmp1,tmp2] = strtok(strrep({data(:).Channel}','_AND',''),'_');
@@ -600,12 +611,25 @@ for a = 1:length(files)
                         if firstsample<0
                             keyboard
                         end
+                        
+                        % create the datetime array with same length as
+                        % the neural data
+                        d.BrainSenseDateTime = [datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','Format','yyyy-MM-dd HH:mm:ss.SSS'), ...
+                            datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','Format','yyyy-MM-dd HH:mm:ss.SSS') + seconds((size(d.trial{1},2) - 1)/fsample)];
+                        d.BrainSenseDateTime.TimeZone = 'UTC';
+                        d.BrainSenseDateTimeFull = d.BrainSenseDateTime(1):...
+                            seconds(1/d.fsample):d.BrainSenseDateTime(2);
+                        d.BrainSenseDateTimeFull.TimeZone = 'America/Los_Angeles';
+                        if size(raw, 2) ~= numel(d.BrainSenseDateTimeFull)
+                            error('Runtime Error: datetime interpolation for time domain data failed')
+                        end
 
-                        d.BrainSenseDateTime = [datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','Format','yyyy-MM-dd HH:mm:ss.SSS'), datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','Format','yyyy-MM-dd HH:mm:ss.SSS') + seconds(size(d.trial{1},2)/fsample)];
-
+                        % change the filename and save files
                         d.trialinfo(1) = c;
                         mod = 'mod-BSTD';
+                        counterBSTD = counterBSTD + 1;
                         d.fname = [hdr.fname '_' mod];
+                        d.fname = strrep(d.fname,'task-Rest',['task-TASK' num2str(counterBSTD)]);
                         d.fnamedate = [char(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','format','yyyyMMddhhmmss'))];
                         d.hdr.Fs = d.fsample;
                         d.hdr.label = d.label;
@@ -619,9 +643,23 @@ for a = 1:length(files)
 
 
                 case 'BrainSenseLfp'
+                    %% Power Domain Data Plotting
+                    % parse for incorrect runs added by mistake
+                    fsample = data.SampleRateInHz;
+                    data_new = struct([]);
+                    for idx_sess = 1:size(data, 1)
+                        lenSample = size(data(idx_sess).LfpData, 1);
+                        if lenSample > fsample * 10
+                            data_new = [data_new; data(idx_sess)]; 
+                        end
+                    end
+                    data = data_new;
+
+                    % identify the number of runs
                     counterBSL=  0;
                     FirstPacketDateTime = strrep(strrep({data(:).FirstPacketDateTime},'T',' '),'Z','');
                     runs = unique(FirstPacketDateTime);
+
                     bsldata=[];bsltime=[];bslchannels=[];
                     figure('Units','centimeters','PaperUnits','centimeters','Position',[1 1 40 20])
                     for c=1:length(runs)
@@ -671,11 +709,13 @@ for a = 1:length(files)
                             d.realtime(e) = datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','Format','yyyy-MM-dd HH:mm:ss.SSS')+seconds((d.time{1}(e)-d.time{1}(1)));
                             d.hdr.BSL.seq(e)= cdata.LfpData(e).Seq;
                         end
+                        d.realtime.TimeZone = "UTC";
+                        d.realtime.TimeZone = 'America/Los_Angeles';
 
                         d.trialinfo(1) = c;
                         d.hdr.realtime = d.realtime;
 
-                        %% set the name for BSL and STIM
+                        % set the name for BSL and STIM
                         counterBSL=  counterBSL+1;
                         mod = 'mod-BSL';
                         d.fname = [hdr.fname '_' mod ];
@@ -708,7 +748,7 @@ for a = 1:length(files)
                         d.fname = strrep(d.fname,'StimOff',acq);
 
                         d.fnamedate = [char(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS','format','yyyyMMddhhmmss'))];
-                        %% plot integrated BSL plot
+                        % plot integrated BSL plot
                         subplot(2,1,1)
                         yyaxis left
                         lp=plot(d.realtime,d.trial{1}(1,:),'linewidth',2);
@@ -1169,7 +1209,8 @@ for a = 1:length(files)
     copyfile(files{a},nfile)
 
     counterBrainSense=0;
-    %% save all data
+
+    %% plot the spectrograms
     for b = 1:length(alldata)
         try
             fullname = fullfile('.',hdr.fpath,alldata{b}.fname);
@@ -1185,7 +1226,7 @@ for a = 1:length(files)
             %% handle BSTD and BSL files to BrainSenseBip
             if regexp(data.fname,'BSTD')
                 counterBrainSense=counterBrainSense+1;
-
+                
                 data.fname = strrep(data.fname,'BSTD','BrainSenseBip');
                 data.fname = strrep(data.fname,'task-Rest',['task-TASK' num2str(counterBrainSense)]);
                 fulldata = data;
@@ -1571,11 +1612,15 @@ function d=call_ecg_cleaning(d,hdr,raw)
 d.ecg=[];
 d.ecg_cleaned=[];
 for e = 1:size(raw,1)
-    d.ecg{e} = perceive_ecg(raw(e,:));
+    d.ecg{e} = perceive_ecg(raw(e,:), d.BrainSenseDateTimeFull);
     title(strrep(d.label{e},'_',' '))
     xlabel(strrep(d.fname,'_',' '))
     %savefig(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e} '.fig']))
-    perceive_print(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e}]), 'png', true)
+    perceive_print(fullfile(hdr.fpath,[d.fname '_ECG_' d.label{e}]), 'png', false)
     d.ecg_cleaned(e,:) = d.ecg{e}.cleandata;
+
+    % obtain and close the current figure
+    fig = gcf;
+    close(fig);
 end
 end
