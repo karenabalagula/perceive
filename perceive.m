@@ -204,7 +204,10 @@ for a = 1:length(files)
     hdr.fpath = fullfile(hdr.subject,hdr.session,'ieeg');
     hdr.fname = [hdr.subject '_' hdr.session '_' task '_' acq];
     hdr.chan = ['LFP_' hdr.LeadLocation];
-    hdr.d0 = datetime(js.SessionEndDate(1:10));
+    hdr.d0 = datetime(js.SessionEndDate(1:10), "TimeZone", "UTC");
+    hdr.d0.TimeZone = "America/Los_Angeles";
+    hdr.d0.Hour = 0;
+    hdr.d0.TimeZone = "";
 
     hdr.js = js;
     if ~exist('datafields','var')
@@ -600,8 +603,10 @@ for a = 1:length(files)
 
                         d.label=Channel(i);
                         d.trial{1} = raw;
-
-                        d.time{1} = linspace(seconds(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS')-hdr.d0),seconds(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS')-hdr.d0)+size(d.trial{1},2)/fsample,size(d.trial{1},2));
+                        
+                        % create the start time
+                        d.time{1} = linspace(seconds(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS')-hdr.d0), ...
+                            seconds(datetime(runs{c},'Inputformat','yyyy-MM-dd HH:mm:ss.SSS')-hdr.d0)+size(d.trial{1},2)/fsample,size(d.trial{1},2));
 
                         d.fsample = fsample;
 
@@ -1283,13 +1288,15 @@ for a = 1:length(files)
                         ylabel('Raw amplitude')
                         if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
                             pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
-                            pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
+                            stimFreq = bsl.data.hdr.BSL.TherapySnapshot.Left.RateInHertz;
                         elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
                             pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
+                            stimFreq = bsl.data.hdr.BSL.TherapySnapshot.Right.RateInHertz;
                         else
                             error('neither Left nor Right TherapySnapshot present');
                         end
-                        [tf_side1, t, f_side1]=perceive_raw_tf(fulldata.trial{1}(1,:),fulldata.fsample,128,.3);
+                        [tf_side1, t, f_side1]=perceive_raw_tf(fulldata.trial{1}(1,:),fulldata.fsample, ...
+                            stimFreq, 128,.3);
                         % mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
 
                         yyaxis right
@@ -1326,12 +1333,15 @@ for a = 1:length(files)
                         ylabel('Raw amplitude')
                         if isfield(bsl.data.hdr.BSL.TherapySnapshot,'Right')
                             pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Right.FrequencyInHertz;
+                            stimFreq = bsl.data.hdr.BSL.TherapySnapshot.Right.RateInHertz;
                         elseif isfield(bsl.data.hdr.BSL.TherapySnapshot,'Left')
                             pkfreq = bsl.data.hdr.BSL.TherapySnapshot.Left.FrequencyInHertz;
+                            stimFreq = bsl.data.hdr.BSL.TherapySnapshot.Left.RateInHertz;
                         else
                             error('neither Left nor Right TherapySnapshot present');
                         end
-                        [tf_side2,t,f_side2]=perceive_raw_tf(fulldata.trial{1}(2,:),fulldata.fsample,fulldata.fsample,.5);
+                        [tf_side2,t,f_side2]=perceive_raw_tf(fulldata.trial{1}(2,:),fulldata.fsample, ...
+                            stimFreq, fulldata.fsample,.5);
                         % mpow=nanmean(tf(perceive_sc(f,pkfreq-4):perceive_sc(f,pkfreq+4),:));
 
                         yyaxis right
